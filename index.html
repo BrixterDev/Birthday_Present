@@ -36,6 +36,11 @@
       border-radius: 10px;
     }
 
+    /* ===== HIDDEN AUDIO ===== */
+    #bgMusic {
+      display: none;
+    }
+
     /* ===== ENVELOPE SECTION ===== */
     .envelope-section {
       width: 100%;
@@ -650,6 +655,15 @@
       box-shadow: 0 8px 32px rgba(180, 70, 110, 0.1);
       position: relative;
       overflow: hidden;
+      opacity: 0;
+      transform: translateY(30px) scale(0.95);
+      transition: opacity 1s cubic-bezier(0.23, 1, 0.32, 1),
+                  transform 1s cubic-bezier(0.23, 1, 0.32, 1);
+    }
+
+    .candle-section.visible {
+      opacity: 1;
+      transform: translateY(0) scale(1);
     }
 
     .candle-section::before {
@@ -728,7 +742,6 @@
       transform: rotate(-15deg);
     }
 
-    /* Candle stripes */
     .candle-stripe {
       position: absolute;
       left: 10%;
@@ -741,7 +754,6 @@
     .candle-stripe:nth-child(2) { top: 45%; }
     .candle-stripe:nth-child(3) { top: 65%; }
 
-    /* Flame */
     .flame {
       position: absolute;
       top: -35px;
@@ -793,7 +805,6 @@
       100% { transform: translateX(-50%) scale(1.1) translateY(-3px); }
     }
 
-    /* Flame extinguished */
     .flame.extinguished {
       opacity: 0;
       transform: translateX(-50%) scale(0.1);
@@ -801,7 +812,6 @@
       transition: all 0.5s ease;
     }
 
-    /* Glow ring around candle */
     .glow-ring {
       position: absolute;
       top: -50px;
@@ -819,7 +829,6 @@
       opacity: 0;
     }
 
-    /* Candle base/plate */
     .candle-plate {
       width: 80px;
       height: 10px;
@@ -829,7 +838,6 @@
       margin-top: -2px;
     }
 
-    /* Blow button / mic indicator */
     .blow-indicator {
       margin-top: 1.2rem;
       display: flex;
@@ -876,7 +884,6 @@
       50% { transform: scale(1.05); }
     }
 
-    /* Candle blown state */
     .candle-blown .candle-body {
       opacity: 0.6;
     }
@@ -907,6 +914,22 @@
       0% { transform: scale(0); opacity: 0; }
       50% { transform: scale(1.3); opacity: 1; }
       100% { transform: scale(1); opacity: 1; }
+    }
+
+    /* Music status indicator */
+    .music-status {
+      margin-top: 0.8rem;
+      font-size: 0.75rem;
+      color: #b38a9a;
+      opacity: 0.6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+
+    .music-status .music-icon {
+      animation: pulseMic 2s ease-in-out infinite;
     }
 
     /* ===== RESPONSIVE ===== */
@@ -1007,6 +1030,13 @@
   </style>
 </head>
 <body>
+
+<!-- Updated audio element with your downloaded file -->
+<audio id="bgMusic" loop preload="auto">
+  <source src="mp3/hbd.mp3" type="audio/mpeg">
+  <!-- Fallback if the file fails to load -->
+  <source src="mp3/hbd.mp3" type="mp3/mpeg">
+</audio>
 
   <!-- ENVELOPE SECTION -->
   <div class="envelope-section">
@@ -1152,6 +1182,11 @@
         <span class="blow-status" id="blowStatus">🎵 listening...</span>
       </div>
 
+      <div class="music-status" id="musicStatus">
+        <span class="music-icon">🎵</span>
+        <span id="musicStatusText">🎵 Happy Birthday playing...</span>
+      </div>
+
       <div class="celebration-message" id="celebrationMessage">
         🎉 Wish Granted! 🎉
         <span class="emoji-burst">✨🌸💖🌸✨</span>
@@ -1175,6 +1210,7 @@
       const letterContainer = document.getElementById('letterContainer');
       const photobookWrapper = document.getElementById('photobookWrapper');
       const envelopeNotice = document.getElementById('envelopeNotice');
+      const candleSection = document.getElementById('candleSection');
       let isOpen = false;
       let stepsRevealed = 0;
       const totalSteps = 7;
@@ -1182,6 +1218,40 @@
       let isLetterVisible = false;
       let photobookTriggered = false;
       let imageHideTimeout = null;
+      let musicStarted = false;
+      let candleVisible = false;
+
+      // ----- BACKGROUND MUSIC -----
+      const bgMusic = document.getElementById('bgMusic');
+      
+      function startMusic() {
+        if (musicStarted) return;
+        musicStarted = true;
+        bgMusic.volume = 0.35;
+        bgMusic.play().catch(e => {
+          console.log('Music autoplay prevented, user interaction needed');
+          // Try again on next user click
+          document.addEventListener('click', function playOnClick() {
+            bgMusic.play().catch(() => {});
+            document.removeEventListener('click', playOnClick);
+          }, { once: true });
+        });
+        document.getElementById('musicStatusText').textContent = '🎵 Happy Birthday playing... 🎂';
+      }
+
+      // Show candle section when all steps are revealed
+      function showCandleSection() {
+        if (candleVisible) return;
+        candleVisible = true;
+        candleSection.classList.add('visible');
+        // Start music when candle appears
+        setTimeout(startMusic, 300);
+        
+        // Also try to start microphone
+        if (!audioContext) {
+          initMicrophone();
+        }
+      }
 
       function openEnvelope() {
         if (isOpen) return;
@@ -1234,6 +1304,15 @@
         stepsRevealed = 0;
         lastScrollY = 0;
         photobookTriggered = false;
+        candleVisible = false;
+        candleSection.classList.remove('visible');
+        // Stop music when envelope is closed
+        if (musicStarted) {
+          bgMusic.pause();
+          bgMusic.currentTime = 0;
+          musicStarted = false;
+          document.getElementById('musicStatusText').textContent = '🎵 Happy Birthday playing...';
+        }
       }
 
       function toggleEnvelope() {
@@ -1311,6 +1390,8 @@
 
         if (stepsRevealed >= totalSteps) {
           console.log('🎉 All steps revealed!');
+          // Show candle section when all steps are done
+          setTimeout(showCandleSection, 500);
         }
       }
 
@@ -1356,7 +1437,6 @@
       const blowIndicator = document.getElementById('blowIndicator');
       const blowStatus = document.getElementById('blowStatus');
       const celebrationMessage = document.getElementById('celebrationMessage');
-      const candleSection = document.getElementById('candleSection');
       let isBlown = false;
       let audioContext = null;
       let analyser = null;
@@ -1368,6 +1448,7 @@
 
       // Request microphone access
       async function initMicrophone() {
+        if (audioContext) return;
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
           audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -1413,7 +1494,7 @@
         const average = sum / dataArray.length;
         
         // Blow detection threshold (adjustable)
-        const threshold = 35;
+        const threshold = 50;
         
         if (average > threshold) {
           const now = Date.now();
@@ -1480,7 +1561,7 @@
 
       // Start microphone on user interaction (click/tap anywhere)
       document.addEventListener('click', function initAudio() {
-        if (!audioContext) {
+        if (!audioContext && candleVisible) {
           initMicrophone();
         }
         document.removeEventListener('click', initAudio);
@@ -1488,7 +1569,7 @@
 
       // Also try on touch
       document.addEventListener('touchstart', function initAudioTouch() {
-        if (!audioContext) {
+        if (!audioContext && candleVisible) {
           initMicrophone();
         }
         document.removeEventListener('touchstart', initAudioTouch);
@@ -1496,7 +1577,7 @@
 
       // If user interacts with candle section directly
       candleSection.addEventListener('click', function() {
-        if (!audioContext) {
+        if (!audioContext && candleVisible) {
           initMicrophone();
         }
       });
@@ -1641,12 +1722,15 @@
         if (audioContext) {
           audioContext.close();
         }
+        bgMusic.pause();
+        bgMusic.currentTime = 0;
       });
 
       console.log('🌸 Happy Birthday Abay! 🎂');
       console.log('📜 Click envelope to see the letter rise from inside!');
       console.log('⏱️ Images will compile into photobook after 5 seconds!');
       console.log('🕯️ Blow into your microphone to extinguish the candle!');
+      console.log('🎵 Happy Birthday music will start when the candle appears!');
     })();
   </script>
 </body>
